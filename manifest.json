@@ -1,0 +1,50 @@
+{
+  "manifest_version": 1,
+  "id": "coqui-xtts",
+  "version": "1.0.0",
+  "display_name": "Coqui XTTS-v2 (offline + voice clone)",
+  "summary": "Multilingual neural TTS with 6-second voice cloning. Heavy: ~2 GB model, CPU or CUDA.",
+  "author": "Subtitld add-on team",
+  "license": "MPL 2.0 (XTTS) + CPML for the v2 model — non-commercial without a Coqui license",
+  "executable": "bin/coqui-xtts-addon",
+  "protocol": 1,
+  "startup_timeout_sec": 120,
+  "platforms": ["linux", "macos", "windows"],
+  "tasks": ["tts.synthesize"],
+  "voice_clone": true,
+  "languages": ["en", "es", "fr", "de", "it", "pt", "pl", "tr", "ru", "nl", "cs", "ar", "zh-cn", "ja", "hu", "ko"],
+  "voices": [
+    {"id": "xtts-female-1", "language": "en", "display_name": "XTTS female 1 (English)"},
+    {"id": "xtts-male-1",   "language": "en", "display_name": "XTTS male 1 (English)"},
+    {"id": "xtts-clone",    "language": "*",  "display_name": "Custom voice (clone from reference audio)", "requires": ["voice_ref_audio"]}
+  ],
+  "models": [
+    {"id": "xtts_v2", "url": "https://huggingface.co/coqui/XTTS-v2/resolve/main/model.pth", "sha256": "TODO", "size_mb": 1850, "bundled": false},
+    {"id": "xtts_v2_config", "url": "https://huggingface.co/coqui/XTTS-v2/resolve/main/config.json", "sha256": "TODO", "size_mb": 1, "bundled": false},
+    {"id": "xtts_v2_vocab", "url": "https://huggingface.co/coqui/XTTS-v2/resolve/main/vocab.json", "sha256": "TODO", "size_mb": 1, "bundled": false}
+  ],
+  "disk_required_mb": 4096,
+  "ram_required_mb": 6144,
+  "gpu": "optional",
+  "config_schema": {
+    "fields": [
+      {
+        "key": "device",
+        "type": "select",
+        "label": "Inference device",
+        "default": "cpu",
+        "options": [
+          {"value": "cpu", "label": "CPU (slow but always works)"},
+          {"value": "cuda", "label": "CUDA (NVIDIA GPU, much faster)"},
+          {"value": "mps", "label": "MPS (Apple Silicon, beta)"}
+        ]
+      },
+      {
+        "key": "voice_ref_audio",
+        "type": "file",
+        "label": "Default voice reference (6+ seconds, mono WAV recommended)",
+        "help": "Used by the 'xtts-clone' voice. Per-speaker overrides set in the speaker panel take precedence."
+      }
+    ]
+  }
+}
