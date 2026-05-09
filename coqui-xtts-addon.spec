@@ -8,14 +8,28 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 # TTS pulls a *lot* of optional submodules — collect_submodules walks the
 # package and gives us the union, then PyInstaller drops anything not used
 # during analysis.
+#
+# The idiap/coqui-ai-TTS fork inlined some helpers (`coqpit`, `trainer`)
+# that were separate packages in the original Coqui distribution; older
+# releases still expect them, newer ones don't. Wrap each lookup so a
+# missing dep is a no-op rather than a freeze-time failure — the actual
+# import chain pulled by the addon code (only `TTS.api` and `TTS.utils`)
+# is what matters for runtime correctness.
+def _safe_collect(fn, name):
+    try:
+        return fn(name)
+    except Exception:
+        return []
+
+
 hiddenimports = (
-    collect_submodules('TTS')
-    + collect_submodules('coqpit')
-    + collect_submodules('trainer')
+    _safe_collect(collect_submodules, 'TTS')
+    + _safe_collect(collect_submodules, 'coqpit')
+    + _safe_collect(collect_submodules, 'trainer')
 )
 datas = (
-    collect_data_files('TTS')
-    + collect_data_files('trainer')
+    _safe_collect(collect_data_files, 'TTS')
+    + _safe_collect(collect_data_files, 'trainer')
     + [('manifest.json', '.')]
 )
 

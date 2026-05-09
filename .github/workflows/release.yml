@@ -65,7 +65,14 @@ jobs:
           # asset (e.g. `coqui-xtts-1.0.0-linux-x86_64-cuda121.zip`).
           pip install pyinstaller
           pip install torch --extra-index-url https://download.pytorch.org/whl/cpu
-          pip install "coqui-tts==0.24.*"
+          # Source: idiap/coqui-ai-TTS — the maintained fork after Coqui
+          # the company shut down. The original `coqui-tts` PyPI package
+          # was abandoned at 0.24.x; the idiap fork continues the version
+          # sequence (0.25+), keeps the same `TTS` import path, and
+          # publishes wheels for modern Python/torch. Pinning to a
+          # specific tag instead of `>=` so CI builds are reproducible
+          # for a given Subtitld add-on version.
+          pip install "git+https://github.com/idiap/coqui-ai-TTS.git@v0.27.5"
 
       - name: Build add-on bundle
         env:
