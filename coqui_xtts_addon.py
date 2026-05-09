@@ -33,7 +33,7 @@ logging.basicConfig(stream=sys.stderr, level=logging.INFO,
 
 PROTOCOL = 1
 ADDON_ID = 'coqui-xtts'
-VERSION = '1.0.2'
+VERSION = '1.0.3'
 
 
 # ---------------------------------------------------------------------------
