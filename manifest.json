@@ -1,7 +1,7 @@
 {
   "manifest_version": 1,
   "id": "coqui-xtts",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "display_name": "Coqui XTTS-v2 (offline + voice clone)",
   "summary": "Multilingual neural TTS with 6-second voice cloning. Heavy: ~2 GB model, CPU or CUDA.",
   "author": "Subtitld add-on team",
