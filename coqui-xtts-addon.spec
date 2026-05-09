@@ -26,10 +26,16 @@ hiddenimports = (
     _safe_collect(collect_submodules, 'TTS')
     + _safe_collect(collect_submodules, 'coqpit')
     + _safe_collect(collect_submodules, 'trainer')
+    # `TTS.tts.models.xtts` imports torchaudio at module scope. PyInstaller
+    # *should* pick that up via static analysis, but the v1.0.3 frozen
+    # bundle shipped without it — collect explicitly so we never depend on
+    # static-analysis lucky breaks.
+    + _safe_collect(collect_submodules, 'torchaudio')
 )
 datas = (
     _safe_collect(collect_data_files, 'TTS')
     + _safe_collect(collect_data_files, 'trainer')
+    + _safe_collect(collect_data_files, 'torchaudio')
     + [('manifest.json', '.')]
 )
 

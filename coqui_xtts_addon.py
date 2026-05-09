@@ -33,7 +33,17 @@ logging.basicConfig(stream=sys.stderr, level=logging.INFO,
 
 PROTOCOL = 1
 ADDON_ID = 'coqui-xtts'
-VERSION = '1.0.3'
+VERSION = '1.0.4'
+
+# Manifest voice id → XTTS-v2 built-in speaker name (from speakers.pth).
+# XTTS-v2 ships ~58 named speakers; we expose two as friendly preset
+# voices. Real names live here (not in the manifest) so that the manifest
+# stays stable if upstream renames a speaker — only the wrapper has to
+# update. Anything not in this map and not `xtts-clone` is rejected.
+_XTTS_SPEAKER_MAP: dict[str, str] = {
+    'xtts-female-1': 'Claribel Dervla',
+    'xtts-male-1':   'Damien Black',
+}
 
 
 # ---------------------------------------------------------------------------
@@ -134,6 +144,15 @@ def handle_tts_synthesize(rid: str, params: dict, default_device: str, default_s
                    'xtts-clone voice requires `voice_ref_audio` (path to 6+s reference clip)')
         return
 
+    # Map manifest preset voice ids to XTTS-v2's built-in speaker names.
+    # Bail out early on unknown ids so we don't waste a (~10 s) model load
+    # before we know we can't service the request.
+    if not use_clone and voice_id not in _XTTS_SPEAKER_MAP:
+        emit_error(rid, 'unsupported_voice',
+                   f'unknown voice id: {voice_id!r} '
+                   f'(supported: {sorted(_XTTS_SPEAKER_MAP)} or xtts-clone)')
+        return
+
     emit_progress(rid, 0.05, 'Loading XTTS model (first call may take a while)...')
     try:
         tts = _load_xtts(default_device)
@@ -149,8 +168,9 @@ def handle_tts_synthesize(rid: str, params: dict, default_device: str, default_s
         if use_clone and speaker_wav:
             kwargs['speaker_wav'] = speaker_wav
         else:
-            # Fallback to a built-in speaker name for non-clone voices.
-            kwargs['speaker'] = voice_id.replace('xtts-', '')
+            # Use the explicit map — XTTS-v2 speaker names contain spaces
+            # and don't follow our `xtts-female-1` manifest convention.
+            kwargs['speaker'] = _XTTS_SPEAKER_MAP[voice_id]
         tts.tts_to_file(**kwargs)
     except Exception as exc:
         log.exception('xtts synth failed')
@@ -238,6 +258,13 @@ def main() -> int:
                 args=(rid, frame.get('params') or {}, default_device, default_speaker_wav),
                 daemon=True,
             ).start()
+            continue
+        # Host control frames (`ready` confirms our hello, future-proof
+        # for other host-→-addon notifications) carry no request id and
+        # expect no response. Log and ignore — only error on actual
+        # *requests* we don't recognise.
+        if not rid:
+            log.debug('ignoring host control frame: %s', ftype)
             continue
 
         emit_error(rid, 'bad_params', f'unknown request type: {ftype!r}')

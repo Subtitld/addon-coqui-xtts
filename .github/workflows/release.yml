@@ -64,7 +64,11 @@ jobs:
           # asset limit. CUDA builds, when we add them, ship as a separate
           # asset (e.g. `coqui-xtts-1.0.0-linux-x86_64-cuda121.zip`).
           pip install pyinstaller
-          pip install torch --extra-index-url https://download.pytorch.org/whl/cpu
+          # torch + torchaudio together from the CPU index — torchaudio's
+          # ABI is bound to the exact torch version, and `coqui-ai-TTS`
+          # imports it at module scope (`TTS.tts.models.xtts`). Installing
+          # both from the same index keeps the wheels in lockstep.
+          pip install torch torchaudio --extra-index-url https://download.pytorch.org/whl/cpu
           # Source: idiap/coqui-ai-TTS — the maintained fork after Coqui
           # the company shut down. The original `coqui-tts` PyPI package
           # was abandoned at 0.24.x; the idiap fork continues the version
