@@ -77,6 +77,14 @@ jobs:
           # specific tag instead of `>=` so CI builds are reproducible
           # for a given Subtitld add-on version.
           pip install "git+https://github.com/idiap/coqui-ai-TTS.git@v0.27.5"
+          # coqui-ai-TTS v0.27.5 declares `transformers>=4.57` in its
+          # pyproject, but pip's resolver picked up an older version in
+          # the v1.0.4 freeze (`isin_mps_friendly` was added to
+          # transformers 4.40 — the bundled wheel was somehow older
+          # despite the >=4.57 floor, likely because of torch's own
+          # transitive constraints). Force-resolve here so the freeze
+          # always sees the symbol coqui-ai-TTS imports.
+          pip install --upgrade "transformers>=4.57"
 
       - name: Build add-on bundle
         env:
