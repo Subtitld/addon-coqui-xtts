@@ -32,8 +32,22 @@ hiddenimports = (
     # static-analysis lucky breaks.
     + _safe_collect(collect_submodules, 'torchaudio')
 )
+# `TTS` does runtime filesystem introspection of its own package tree:
+# e.g. `TTS/vocoder/configs/__init__.py` reads its containing directory
+# to enumerate available config classes (a registry pattern). In a
+# PyInstaller --onedir build, .py files normally live inside the .pyz
+# zip archive and are NOT on disk — so any `os.listdir(__path__[0])` or
+# `inspect.getsourcefile()` call against package internals fails with
+# `FileNotFoundError: TTS/vocoder/configs/__init__.py`. The v1.0.6
+# bundle crashed on first synthesis with exactly that error.
+#
+# `include_py_files=True` forces PyInstaller to also place the .py files
+# in the disk-side tree (in addition to the .pyz), so the runtime
+# introspection succeeds. Combined with `collect_submodules` above,
+# this gives both static-analysis coverage (hidden imports) and the
+# physical-files-on-disk that Coqui's registry code needs.
 datas = (
-    _safe_collect(collect_data_files, 'TTS')
+    _safe_collect(lambda n: collect_data_files(n, include_py_files=True), 'TTS')
     + _safe_collect(collect_data_files, 'trainer')
     + _safe_collect(collect_data_files, 'torchaudio')
     + [('manifest.json', '.')]

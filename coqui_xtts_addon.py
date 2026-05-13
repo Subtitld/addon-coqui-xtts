@@ -33,7 +33,7 @@ logging.basicConfig(stream=sys.stderr, level=logging.INFO,
 
 PROTOCOL = 1
 ADDON_ID = 'coqui-xtts'
-VERSION = '1.0.6'
+VERSION = '1.0.7'
 
 # Manifest voice id → XTTS-v2 built-in speaker name (from speakers.pth).
 # XTTS-v2 ships ~58 named speakers; we expose two as friendly preset
