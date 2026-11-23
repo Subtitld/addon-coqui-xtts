@@ -68,7 +68,9 @@ jobs:
           # ABI is bound to the exact torch version, and `coqui-ai-TTS`
           # imports it at module scope (`TTS.tts.models.xtts`). Installing
           # both from the same index keeps the wheels in lockstep.
-          pip install torch torchaudio --extra-index-url https://download.pytorch.org/whl/cpu
+          # Below 2.9: from torch 2.9 coqui-tts refuses to import without
+          # TorchCodec, which needs FFmpeg's shared libraries in the bundle.
+          pip install "torch==2.8.*" "torchaudio==2.8.*" --extra-index-url https://download.pytorch.org/whl/cpu
           # Source: idiap/coqui-ai-TTS — the maintained fork after Coqui
           # the company shut down. The original `coqui-tts` PyPI package
           # was abandoned at 0.24.x; the idiap fork continues the version
@@ -76,7 +78,11 @@ jobs:
           # publishes wheels for modern Python/torch. Pinning to a
           # specific tag instead of `>=` so CI builds are reproducible
           # for a given Subtitld add-on version.
-          pip install "git+https://github.com/idiap/coqui-ai-TTS.git@v0.27.5"
+          # With the ja, ko and zh extras: the Japanese, Korean and Chinese
+          # text front ends (1.0.7 had none of Japanese and Chinese). six is
+          # imported by TTS/tts/utils/text/punctuation.py but not declared.
+          pip install "coqui-tts[ja,ko,zh] @ git+https://github.com/idiap/coqui-ai-TTS.git@v0.27.5" six \
+            "torch==2.8.*" "torchaudio==2.8.*" --extra-index-url https://download.pytorch.org/whl/cpu
           # coqui-ai-TTS v0.27.5 imports
           # `transformers.pytorch_utils.isin_mps_friendly` and declares
           # `transformers>=4.57` in its pyproject. Two pitfalls bracket
@@ -94,6 +100,15 @@ jobs:
           # Lock to the working window. coqui-ai-TTS doesn't (yet) need
           # transformers 5.x APIs.
           pip install --upgrade "transformers>=4.57,<5"
+
+      - name: Keep a full pkg_resources
+        shell: bash
+        run: |
+          # torch pulls setuptools 84, whose pkg_resources lacks NullProvider;
+          # PyInstaller's pkg_resources runtime hook then kills the frozen
+          # add-on at start (seen on macOS with the Kokoro add-on). torch
+          # needs >= 77.
+          pip install "setuptools>=77,<81"
 
       - name: Build add-on bundle
         env:
@@ -141,6 +156,7 @@ jobs:
                   except Exception: pass
           print('frame:', (line or '').strip())
           if not line:
+              print(proc.stderr.read()[-4000:])
               sys.exit('no hello frame received within 30 s')
           frame = json.loads(line)
           assert frame.get('type') == 'hello', frame
@@ -151,6 +167,13 @@ jobs:
           voices = tts.get('voices') or []
           assert any(v.get('id') == 'xtts-clone' for v in voices), voices
           PY
+
+      - name: Speak real lines with the frozen binary
+        shell: bash
+        run: |
+          BIN="dist/coqui-xtts-addon/coqui-xtts-addon"
+          if [ "$RUNNER_OS" = "Windows" ]; then BIN="${BIN}.exe"; fi
+          python tools/smoke_synth.py "$BIN"
 
       - name: Pack zip
         id: pack

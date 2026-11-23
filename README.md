@@ -20,7 +20,7 @@ pip install torch --extra-index-url https://download.pytorch.org/whl/cpu
 pip install "git+https://github.com/idiap/coqui-ai-TTS.git@v0.27.5"
 pyinstaller coqui-xtts-addon.spec --distpath dist/
 cd dist/coqui-xtts-addon
-zip -r ../coqui-xtts-1.0.0-linux-x86_64.zip . ../../manifest.json ../../LICENSE ../../README.md
+zip -r ../coqui-xtts-26.11.1-linux-x86_64.zip . ../../manifest.json ../../LICENSE ../../README.md
 ```
 
 For CUDA builds, install the matching `torch` wheel (`+cu121`, `+cu118`, etc.)

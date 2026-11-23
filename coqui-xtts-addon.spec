@@ -31,6 +31,12 @@ hiddenimports = (
     # bundle shipped without it — collect explicitly so we never depend on
     # static-analysis lucky breaks.
     + _safe_collect(collect_submodules, 'torchaudio')
+    + _safe_collect(collect_submodules, 'ko_speech_tools')
+    + _safe_collect(collect_submodules, 'cutlet')
+    + _safe_collect(collect_submodules, 'fugashi')
+    + _safe_collect(collect_submodules, 'unidic_lite')
+    + _safe_collect(collect_submodules, 'pypinyin')
+    + _safe_collect(collect_submodules, 'spacy_pkuseg')
 )
 # `TTS` does runtime filesystem introspection of its own package tree:
 # e.g. `TTS/vocoder/configs/__init__.py` reads its containing directory
@@ -50,6 +56,16 @@ datas = (
     _safe_collect(lambda n: collect_data_files(n, include_py_files=True), 'TTS')
     + _safe_collect(collect_data_files, 'trainer')
     + _safe_collect(collect_data_files, 'torchaudio')
+    # Korean text front end: its word lists live in ko_speech_tools/data,
+    # a folder without __init__.py (1.0.7 failed every line without it)
+    + _safe_collect(lambda n: collect_data_files(n, include_py_files=True), 'ko_speech_tools')
+    # Japanese (cutlet, fugashi + its dictionary) and Chinese (pypinyin,
+    # spacy_pkuseg): coqui-tts's ja and zh extras, and their data
+    + _safe_collect(collect_data_files, 'cutlet')
+    + _safe_collect(collect_data_files, 'fugashi')
+    + _safe_collect(collect_data_files, 'unidic_lite')
+    + _safe_collect(collect_data_files, 'pypinyin')
+    + _safe_collect(collect_data_files, 'spacy_pkuseg')
     + [('manifest.json', '.')]
 )
 
@@ -65,6 +81,9 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=['tensorflow', 'jax', 'flax'],
+    # inflect (the English number reader) decorates its engine with
+    # typeguard's @typechecked, which reads the class's .py source on import
+    module_collection_mode={'inflect': 'pyz+py'},
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,

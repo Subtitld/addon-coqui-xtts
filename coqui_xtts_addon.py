@@ -33,7 +33,7 @@ logging.basicConfig(stream=sys.stderr, level=logging.INFO,
 
 PROTOCOL = 1
 ADDON_ID = 'coqui-xtts'
-VERSION = '1.0.7'
+VERSION = '26.11.1'
 
 # Manifest voice id → XTTS-v2 built-in speaker name (from speakers.pth).
 # XTTS-v2 ships ~58 named speakers; we expose two as friendly preset
@@ -50,13 +50,40 @@ _XTTS_SPEAKER_MAP: dict[str, str] = {
 # Wire helpers
 # ---------------------------------------------------------------------------
 _write_lock = threading.Lock()
+# stdout is the protocol channel. Coqui TTS prints to it, which the host
+# can't parse, so frames go to a handle of their own and print() goes to
+# stderr.
+_protocol_out = sys.stdout
+sys.stdout = sys.stderr
 
 
 def write_frame(frame: dict) -> None:
     line = json.dumps(frame, ensure_ascii=False)
     with _write_lock:
-        sys.stdout.write(line + '\n')
-        sys.stdout.flush()
+        _protocol_out.write(line + '\n')
+        _protocol_out.flush()
+
+
+def _import_tts():
+    from TTS.api import TTS  # type: ignore
+    _audio_without_torchcodec()
+    return TTS
+
+
+def _audio_without_torchcodec():
+    """XTTS reads the reference clip with torchaudio.load, which since
+    torchaudio 2.9 needs TorchCodec and FFmpeg's shared libraries. Read it
+    with soundfile instead: Subtitld hands over WAV clips."""
+    import numpy as np
+    import soundfile as sf
+    import torch
+    import torchaudio
+
+    def load(path, *args, **kwargs):
+        data, sample_rate = sf.read(str(path), dtype='float32', always_2d=True)
+        return torch.from_numpy(np.ascontiguousarray(data.T)), sample_rate
+
+    torchaudio.load = load
 
 
 def emit_progress(rid, value, message=''):
@@ -78,6 +105,7 @@ def emit_result(rid, data):
 # ---------------------------------------------------------------------------
 _xtts_lock = threading.Lock()
 _xtts_model = None
+_synth_lock = threading.Lock()   # one line at a time: the seed is process-wide
 _pending_cancel: set[str] = set()
 _pending_cancel_lock = threading.Lock()
 
@@ -99,7 +127,7 @@ def _load_xtts(device: str = 'cpu'):
             return _xtts_model
 
         try:
-            from TTS.api import TTS  # type: ignore
+            TTS = _import_tts()
         except ImportError as exc:
             raise RuntimeError(f'coqui-tts python package not available: {exc}') from exc
 
@@ -125,7 +153,9 @@ def handle_tts_synthesize(rid: str, params: dict, default_device: str, default_s
     text = params.get('text')
     voice_id = params.get('voice')
     output_path = params.get('output_path')
-    language = (params.get('language') or 'en')[:2]
+    # XTTS names its languages by two letters, but for Chinese, zh-cn
+    language = (params.get('language') or 'en').lower()
+    language = 'zh-cn' if language.startswith('zh') else language[:2]
     if not text or not voice_id or not output_path:
         emit_error(rid, 'bad_params', 'text, voice, and output_path are all required')
         return
@@ -171,7 +201,13 @@ def handle_tts_synthesize(rid: str, params: dict, default_device: str, default_s
             # Use the explicit map — XTTS-v2 speaker names contain spaces
             # and don't follow our `xtts-female-1` manifest convention.
             kwargs['speaker'] = _XTTS_SPEAKER_MAP[voice_id]
-        tts.tts_to_file(**kwargs)
+        with _synth_lock:
+            # A seed makes a take repeatable; XTTS samples, and now and then
+            # rambles on after the line, so another seed is another take.
+            if params.get('seed') is not None:
+                import torch
+                torch.manual_seed(int(params['seed']))
+            tts.tts_to_file(**kwargs)
     except Exception as exc:
         log.exception('xtts synth failed')
         emit_error(rid, 'internal', f'synthesize failed: {exc}')
@@ -199,6 +235,11 @@ def handle_tts_synthesize(rid: str, params: dict, default_device: str, default_s
 # Main loop
 # ---------------------------------------------------------------------------
 def main() -> int:
+    if getattr(sys, 'frozen', False) and sys.argv[1:2] == ['-m']:
+        # Something ran the frozen add-on as if it were Python
+        # (`sys.executable -m pip ...`). It isn't; don't answer as an add-on.
+        sys.stderr.write('coqui-xtts-addon is not a Python interpreter\n')
+        return 2
     # Pull voice/language inventory from manifest.
     manifest_path = Path(__file__).resolve().parent / 'manifest.json'
     voices: list[dict] = []
@@ -230,6 +271,14 @@ def main() -> int:
              'voice_clone': True},
         ],
     })
+
+    # Load torch and TTS here, in the main thread, before any request:
+    # imported from a request thread, frozen torch can hang loading its
+    # native extension (seen with the Kokoro add-on on Windows).
+    try:
+        _import_tts()
+    except Exception:
+        log.exception('TTS import failed')   # reported per request by _load_xtts
 
     for raw_line in sys.stdin:
         raw_line = raw_line.strip()
@@ -273,4 +322,8 @@ def main() -> int:
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    code = main()
+    # Leave without interpreter shutdown: torch's thread pools can keep a
+    # frozen add-on alive after `shutdown`. Every frame is flushed by now.
+    sys.stderr.flush()
+    os._exit(code)
